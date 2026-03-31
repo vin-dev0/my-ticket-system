@@ -2,8 +2,6 @@
 
 A modern, full-featured help desk and ticket management system built with Next.js 14, TypeScript, and Tailwind CSS.
 
-![TicketSystem Dashboard](./screenshot.png)
-
 ## ✨ Features
 
 ### Ticket Management
