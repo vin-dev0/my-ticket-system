@@ -1,0 +1,527 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id                   String         @id @default(cuid())
+  email                String         @unique
+  emailVerified        DateTime?
+  name                 String?
+  image                String?
+  passwordHash         String?
+  avatar               String?
+  role                 String         @default("CUSTOMER")
+  plan                 String         @default("STARTER")
+  department           String?
+  phone                String?
+  timezone             String         @default("UTC")
+  isActive             Boolean        @default(true)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  lastLoginAt          DateTime?
+  organizationId       String?
+  subscriptionStatus   String         @default("TRIALING")
+  trialEndsAt          DateTime?
+  subscriptionEndsAt   DateTime?
+  gracePeriodEndsAt    DateTime?
+  lastPaymentAt        DateTime?
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  accounts             Account[]
+  activityLogs         ActivityLog[]
+  createdAssets        Asset[]        @relation("AssetCreator")
+  comments             Comment[]
+  notifications        Notification[]
+  sessions             Session[]
+  teamMemberships      TeamMember[]
+  assignedTickets      Ticket[]       @relation("TicketAssignee")
+  createdTickets       Ticket[]       @relation("TicketCreator")
+  organization         Organization?  @relation(fields: [organizationId], references: [id])
+
+  @@index([email])
+  @@index([role])
+  @@index([subscriptionStatus])
+  @@index([organizationId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Organization {
+  id                   String       @id @default(cuid())
+  name                 String
+  slug                 String       @unique
+  logo                 String?
+  domain               String?
+  settings             String       @default("{}")
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  plan                 String       @default("STARTER")
+  subscriptionStatus   String       @default("TRIALING")
+  trialEndsAt          DateTime?
+  subscriptionEndsAt   DateTime?
+  gracePeriodEndsAt    DateTime?
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  assets               Asset[]
+  chatRooms            ChatRoom[]
+  inventory            Inventory[]
+  inviteCodes          InviteCode[]
+  slaRules             SLARule[]
+  savedViews           SavedView[]
+  tags                 Tag[]
+  teams                Team[]
+  tickets              Ticket[]
+  users                User[]
+
+  @@index([slug])
+}
+
+model Team {
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  color          String       @default("#6366f1")
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  chatRooms      ChatRoom[]
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members        TeamMember[]
+  tickets        Ticket[]
+
+  @@index([organizationId])
+}
+
+model TeamMember {
+  id       String   @id @default(cuid())
+  userId   String
+  teamId   String
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+}
+
+model Ticket {
+  id              String          @id @default(cuid())
+  number          Int             @unique
+  subject         String
+  description     String
+  status          String          @default("OPEN")
+  priority        String          @default("MEDIUM")
+  type            String          @default("QUESTION")
+  channel         String          @default("WEB")
+  creatorId       String
+  assigneeId      String?
+  teamId          String?
+  organizationId  String?
+  slaRuleId       String?
+  dueAt           DateTime?
+  firstResponseAt DateTime?
+  resolvedAt      DateTime?
+  isLocked        Boolean         @default(false)
+  customFields    String          @default("{}")
+  metadata        String          @default("{}")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  activities      ActivityLog[]
+  attachments     Attachment[]
+  comments        Comment[]
+  slaRule         SLARule?        @relation(fields: [slaRuleId], references: [id])
+  organization    Organization?   @relation(fields: [organizationId], references: [id])
+  team            Team?           @relation(fields: [teamId], references: [id])
+  assignee        User?           @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  creator         User            @relation("TicketCreator", fields: [creatorId], references: [id])
+  tags            TicketTag[]
+  watchers        TicketWatcher[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([creatorId])
+  @@index([assigneeId])
+  @@index([teamId])
+  @@index([createdAt])
+  @@index([number])
+}
+
+model Comment {
+  id          String       @id @default(cuid())
+  content     String
+  isInternal  Boolean      @default(false)
+  ticketId    String
+  authorId    String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  attachments Attachment[]
+  author      User         @relation(fields: [authorId], references: [id])
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([authorId])
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  filename  String
+  url       String
+  mimeType  String
+  size      Int
+  ticketId  String?
+  commentId String?
+  createdAt DateTime @default(now())
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  ticket    Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+model TicketWatcher {
+  id        String   @id @default(cuid())
+  ticketId  String
+  userId    String
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, userId])
+}
+
+model Tag {
+  id             String        @id @default(cuid())
+  name           String
+  color          String        @default("#6366f1")
+  description    String?
+  organizationId String?
+  createdAt      DateTime      @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tickets        TicketTag[]
+
+  @@unique([name, organizationId])
+}
+
+model TicketTag {
+  id       String @id @default(cuid())
+  ticketId String
+  tagId    String
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, tagId])
+}
+
+model SLARule {
+  id                String        @id @default(cuid())
+  name              String
+  description       String?
+  priority          String
+  firstResponseTime Int
+  resolutionTime    Int
+  businessHoursOnly Boolean       @default(true)
+  organizationId    String?
+  isActive          Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tickets           Ticket[]
+
+  @@index([priority])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  metadata  String   @default("{}")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String
+  userId     String?
+  ticketId   String?
+  metadata   String   @default("{}")
+  createdAt  DateTime @default(now())
+  ticket     Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([ticketId])
+  @@index([createdAt])
+}
+
+model SavedView {
+  id             String        @id @default(cuid())
+  name           String
+  filters        String
+  columns        String        @default("[]")
+  sortBy         String?
+  sortOrder      String        @default("desc")
+  isDefault      Boolean       @default(false)
+  isShared       Boolean       @default(false)
+  userId         String
+  organizationId String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Article {
+  id           String           @id @default(cuid())
+  title        String
+  slug         String           @unique
+  content      String
+  excerpt      String?
+  status       String           @default("DRAFT")
+  categoryId   String?
+  authorId     String
+  viewCount    Int              @default(0)
+  helpfulCount Int              @default(0)
+  publishedAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  category     ArticleCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([status])
+  @@index([categoryId])
+}
+
+model ArticleCategory {
+  id          String            @id @default(cuid())
+  name        String
+  slug        String            @unique
+  description String?
+  icon        String?
+  parentId    String?
+  order       Int               @default(0)
+  createdAt   DateTime          @default(now())
+  articles    Article[]
+  parent      ArticleCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    ArticleCategory[] @relation("CategoryHierarchy")
+
+  @@index([parentId])
+}
+
+model ChatRoom {
+  id             String           @id @default(cuid())
+  name           String
+  description    String?
+  type           String           @default("PUBLIC")
+  teamId         String?
+  organizationId String?
+  createdById    String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  messages       ChatMessage[]
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team           Team?            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  members        ChatRoomMember[]
+
+  @@index([teamId])
+  @@index([organizationId])
+}
+
+model ChatRoomMember {
+  id         String   @id @default(cuid())
+  chatRoomId String
+  userId     String
+  role       String   @default("member")
+  joinedAt   DateTime @default(now())
+  chatRoom   ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+
+  @@unique([chatRoomId, userId])
+}
+
+model ChatMessage {
+  id             String        @id @default(cuid())
+  content        String
+  chatRoomId     String?
+  senderId       String
+  receiverId     String?
+  replyToId      String?
+  isEdited       Boolean       @default(false)
+  isRead         Boolean       @default(false)
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentType String?
+  attachmentSize Int?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  replyTo        ChatMessage?  @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies        ChatMessage[] @relation("MessageReplies")
+  chatRoom       ChatRoom?     @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+
+  @@index([chatRoomId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+}
+
+model Asset {
+  id             String        @id @default(cuid())
+  assetTag       String        @unique
+  name           String
+  type           String        @default("LAPTOP")
+  manufacturer   String?
+  model          String?
+  serialNumber   String?       @unique
+  status         String        @default("AVAILABLE")
+  organizationId String?
+  location       String?
+  department     String?
+  assignedToId   String?
+  assignedToName String?
+  purchaseDate   DateTime?
+  purchasePrice  Float?
+  warrantyExpiry DateTime?
+  vendor         String?
+  poNumber       String?
+  specifications String        @default("{}")
+  notes          String?
+  barcodeData    String?
+  barcodeFormat  String        @default("CODE128")
+  createdById    String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lastAuditDate  DateTime?
+  createdBy      User          @relation("AssetCreator", fields: [createdById], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([assetTag])
+  @@index([type])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([serialNumber])
+  @@index([organizationId])
+}
+
+model InviteCode {
+  id             String        @id @default(cuid())
+  code           String        @unique
+  email          String?
+  plan           String        @default("STARTER")
+  organizationId String?
+  usedBy         String?
+  usedAt         DateTime?
+  expiresAt      DateTime?
+  maxUses        Int           @default(1)
+  currentUses    Int           @default(0)
+  createdById    String
+  createdAt      DateTime      @default(now())
+  notes          String?
+  type           String        @default("DIRECT")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([code])
+  @@index([email])
+  @@index([usedBy])
+  @@index([organizationId])
+}
+
+model JoinRequest {
+  id             String    @id @default(cuid())
+  userId         String
+  organizationId String
+  inviteCodeId   String?
+  status         String    @default("PENDING")
+  message        String?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, status])
+}
+
+model AccessLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  userEmail  String?
+  ipAddress  String
+  country    String?
+  city       String?
+  region     String?
+  userAgent  String?
+  browser    String?
+  os         String?
+  device     String?
+  path       String
+  method     String
+  statusCode Int?
+  action     String
+  metadata   String   @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([ipAddress])
+  @@index([createdAt])
+  @@index([action])
+}
+
+model Inventory {
+  id             String       @id @default(cuid())
+  sku            String
+  name           String
+  category       String
+  quantity       Int          @default(0)
+  minStock       Int          @default(0)
+  price          Float        @default(0)
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([sku, organizationId])
+  @@index([organizationId])
+  @@index([category])
+}
